@@ -34,13 +34,7 @@ def parse_auth_line(line):
             ip = parts[idx+1]
         except (ValueError, IndexError):
             ip = None
-    date = None
-    if "Mar" in line and "host1" in line:
-        date = " ".join(parts[0:3])
-
     return ts, ip, event_type
-
-
 
 if __name__ == "__main__":
     per_ip_timestamps = defaultdict(list)
@@ -50,15 +44,42 @@ if __name__ == "__main__":
             if ts and ip and event == "failed":   # checks that ts and ip are not null, and that event=="failed"
                 per_ip_timestamps[ip].append(ts)
     
-    
-    # quick print
-    for ip, times in per_ip_timestamps.items():
-        print(ip, len(times))
-
     for ip in per_ip_timestamps:
         per_ip_timestamps[ip].sort()
 
-output = {}
+    # quick print
+    output = {
+        ip: [t.strftime("%Y %b %d %H:%M:%S") for t in times]
+        for ip, times in per_ip_timestamps.items()
+    }
+
+from datetime import timedelta
+
+incidents = []
+window = timedelta(minutes=10)
 for ip, times in per_ip_timestamps.items():
-    output[ip] = [ts.strftime("%b %d %H:%M:%S") for ts in times]
-print(output)
+    times.sort()
+    n = len(times)
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and (times[j+1] - times[i]) <= window:
+            j += 1
+        count = j - i + 1
+        if count >= 5:
+            incidents.append({
+                "ip": ip,
+                "count": count,
+                "first": times[i].isoformat(),
+                "last": times[j].isoformat()
+            })
+            # advance i past this cluster to avoid duplicate overlapping reports:
+            i = j + 1
+        else:
+            i += 1
+
+for line in incidents:
+    count += 1
+
+print("Detected",count,"brute-force incidents")
+print(json.dumps(incidents[:5], indent = 2))
